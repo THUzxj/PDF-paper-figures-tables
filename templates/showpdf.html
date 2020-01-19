@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>PDF figures&tables</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <!-- 引入 Bootstrap -->
+        <link href="http://apps.bdimg.com/libs/bootstrap/3.3.0/css/bootstrap.min.css" rel="stylesheet">
+
+        <!-- HTML5 Shim 和 Respond.js 用于让 IE8 支持 HTML5元素和媒体查询 -->
+        <!-- 注意： 如果通过 file://  引入 Respond.js 文件，则该文件无法起效果 -->
+        <!--[if lt IE 9]>          <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>          <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>       <![endif]-->
+    </head>
+    <body>
+        <div align="center" >
+            <h1>PDF figures&tables</h1>
+            <form enctype='multipart/form-data' action='/pdf/' method="POST" role='form' class="form-inline">
+                {% csrf_token %}
+                <input type="file" name="f"/>
+                <br/>
+                <button type="submit" value="上传" class='btn btn-default'>上传</button>
+            </form>
+        </div>
+        <p>{{ name }}</p>
+        <h2>{{ paper_title}}</h2>
+
+        
+        {%for figures,tables in pages%}
+        <h3>Page {{forloop.counter}}</h3>
+            {%for title,path in figures%}
+                <p>{{title}}</p>
+                {% load staticfiles %}  
+                <img src="{%static path%}" class="img-responsive"></img>
+            {%endfor%}
+            {%for title,path in tables%}
+                <p>{{title}}</p>
+                {% load staticfiles %}  
+                <img src="{%static path%}" class="img-responsive"></img>
+            {%endfor%}
+        {%endfor%}
+        {%for page_table in tables%}
+            {%for table in page_table%}
+                <div class='container'>
+                    <table class='table table-hover'>
+                        {%for row in table%}
+                            {%ifequal forloop.counter 1 %}
+                                <thead>
+                            {% else %}
+                                <tbody>
+                            {% endifequal %}
+                                <tr>
+                                    {% for elem in row %}
+                                        <td>{{elem}}</td>
+                                    {%endfor%}
+                                </tr>
+                            {%ifequal forloop.counter 1 %}
+                                </thead>
+                            {% else %}
+                                </tbody>
+                            {% endifequal %}
+                        {%endfor%}
+                    </table>
+                </div>
+            {%endfor%}
+        {%endfor%}
+        <!-- jQuery (Bootstrap 的 JavaScript 插件需要引入 jQuery) -->
+        <script src="http://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+        <!-- 包括所有已编译的插件 -->
+        <script src="http://apps.bdimg.com/libs/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+    </body>
+</html>
