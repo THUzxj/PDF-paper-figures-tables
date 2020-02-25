@@ -30,7 +30,7 @@ def midPoint(x):
 def trans(origin,height):
     #The coodinate usages in PDFMiner and OpenCV are different
     #round() get the biggest integer smaller than the number
-    box=(origin[0], height-origin[3], origin[2], height-origin[1])
+    box=(origin[0]*scaleRate, (height-origin[3])*scaleRate, origin[2]*scaleRate, (height-origin[1])*scaleRate)
     return tuple([round(a) for a in box])
 
 #input are a LTobject and the page_width
@@ -179,8 +179,9 @@ color = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (160, 32, 240)]
 object_type = ['Object','TextBox','Figure','Line']
 layout_type = ['LTTextBox', 'LTFigure', 'LTLine']
 elem_type = ['Figure','Table','Algorithm']
-candidate_settings = {'left':('left','middle'),'middle':('left','middle','right'),'right':('right','middle')}
-
+posGroups_settings = {'left':('left','middle'),'middle':('left','middle','right'),'right':('right','middle')}
+scaleRate=7
+MIN_LENTH=25
 
 class pdfTitleMiner:
     def __init__(self,path):
@@ -210,9 +211,17 @@ class pdfTitleMiner:
             image_pil = self.image[index]
             image_numpy=np.array(image_pil)
             page_width,page_height=self.layouts[index].bbox[2:4]
-            original_image = cv2.resize(image_numpy, (page_width,page_height), interpolation=cv2.INTER_AREA)
+            original_image = cv2.resize(image_numpy, (page_width*scaleRate,page_height*scaleRate), interpolation=cv2.INTER_AREA)
             for x in self.elem['Figure'][index]:
                 real_box_integer=trans(x.contentbbox,page_height)
+                flag=True
+                for i in range(4):
+                    if(real_box_integer[i]<0):
+                        flag=False
+                if(flag==False):
+                    continue
+                if(real_box_integer[3]-real_box_integer[1]<=0 or real_box_integer[2]-real_box_integer[0]<=0):
+                    continue
                 new_img=original_image[real_box_integer[1]:real_box_integer[3],real_box_integer[0]:real_box_integer[2]]
                 file_name="figure"+str(index)+"-"+str(num)+".png"
                 cv2.imwrite(path+file_name,new_img)
@@ -229,9 +238,17 @@ class pdfTitleMiner:
             image_pil = self.image[index]
             image_numpy=np.array(image_pil)
             page_width,page_height=self.layouts[index].bbox[2:4]
-            original_image = cv2.resize(image_numpy, (page_width,page_height), interpolation=cv2.INTER_AREA)
+            original_image = cv2.resize(image_numpy, (page_width*scaleRate,page_height*scaleRate), interpolation=cv2.INTER_AREA)
             for x in self.elem['Table'][index]:
                 real_box_integer=trans(x.contentbbox,page_height)
+                flag=True
+                for i in range(4):
+                    if(real_box_integer[i]<0):
+                        flag=False
+                if(flag==False):
+                    continue
+                if(real_box_integer[3]-real_box_integer[1]<=0 or real_box_integer[2]-real_box_integer[0]<=0):
+                    continue
                 new_img=original_image[real_box_integer[1]:real_box_integer[3],real_box_integer[0]:real_box_integer[2]]
                 file_name="table"+str(index)+"-"+str(num)+".png"
                 cv2.imwrite(path+file_name,new_img)
@@ -344,10 +361,10 @@ class pdfTitleMiner:
                     #the numbers of figures and textboxs are not so big
                     minn=100000000
                     title=None
-                    candidate=candidate_settings[positionClassifier(x,page_width)]
-                    for group in candidate:
+                    posGroups=posGroups_settings[positionClassifier(x,page_width)]
+                    for group in posGroups:
                         for y in textBoxs[group]:
-                            if(x.bbox[1]<y.bbox[3]):
+                            if(x.bbox[1]<y.bbox[3] or y.get_text()[0]=='(' or len(y.get_text())<MIN_LENTH):
                                 continue
                             dst=rectDistance(x,y)
                             if(dst<minn):
@@ -358,57 +375,29 @@ class pdfTitleMiner:
                     #merge the near textBoxs
                     title_merged=mergedText(title,textBoxs['all'])
                     title_text=title_merged.text
-                    #check the subtitle
-                    if(title_text[0]=='(' or len(title_text)<20):
-                        #find the below title
-                        big_title=None
-                        minn=100000000
-                        for group in candidate:
-                            for y in textBoxs[group]:
-                                if(x.bbox[1]<y.bbox[3] or y.get_text()[0]=='('):
-                                    continue
-                                dst=rectDistance(x,y)
-                                if(dst<minn):
-                                    minn=dst
-                                    big_title=y
-                        big_title_text=big_title.get_text()
-                        if big_title_text in figure_groups:
-                            #加入到已有组中
-                            add_sub=figure(x)
-                            add_sub.setTitle(title_merged)
-                            figure_groups[big_title_text].addFigure(add_sub)
-                        else:
-                            #创建新组
-                            fst_sub=figure(x)
-                            fst_sub.setTitle(title_merged)
-                            new_group=figureGroup(fst_sub)
-                            new_group.setTitle(big_title)
-                            figure_groups[big_title_text]=new_group
-                            page_elem['Figure'].append(new_group)
+                    if title_text in figure_groups:
+                        add_sub=figure(x)
+                        figure_groups[title_text].addFigure(add_sub)
                     else:
-                        title_text=title_merged.get_text()
-                        if title_text in figure_groups:
-                            add_sub=figure(x)
-                            figure_groups[title_text].addFigure(add_sub)
-                        else:
-                            new_fig=figure(x)
-                            new_group=figureGroup(new_fig)
-                            new_group.setTitle(title_merged)
-                            figure_groups[title_text]=new_group
-                            page_elem['Figure'].append(new_group)
+                        new_fig=figure(x)
+                        new_group=figureGroup(new_fig)
+                        new_group.setTitle(title_merged)
+                        figure_groups[title_text]=new_group
+                        page_elem['Figure'].append(new_group)
                     counter['Figure']+=1
+
                 elif(isinstance(x,LTLine)):
                     #horizontal lines
-                    if(equal(x.bbox[1],x.bbox[3])):
+                    if(equal(x.bbox[1],x.bbox[3]) and x.bbox[2]-x.bbox[0]>page_width/6):
                         flag=False
-                        for table in line_groups:
-                            if(equal(table.bbox[0],x.bbox[0]) and equal(table.bbox[2],x.bbox[2])):
-                                table.addLine(x)
+                        for lineGroup in line_groups:
+                            if(equal(lineGroup.bbox[0],x.bbox[0]) and equal(lineGroup.bbox[2],x.bbox[2])):
+                                lineGroup.addLine(x)
                                 flag=True
                                 break
                         if(flag==False):
-                            new_table=Table(x)
-                            line_groups.append(new_table)
+                            new_group=Table(x)
+                            line_groups.append(new_group)
                     counter['Line']+=1
                 counter['Object']+=1
 
@@ -417,54 +406,57 @@ class pdfTitleMiner:
 
             #find tables
             for table in line_groups:
-                if(table.lineNum>=2 and table.bbox[2]-table.bbox[0]>50):
-                    text=self.text_in_rect(table,textBoxs['all'])
-                    if(len(text)!=0):
-                        if(re.search("Algorithm",text[0].get_text())):
-                            page_elem['Algorithm'].append(table)
-                            continue
-                    #split lines into groups
-                    divided=[]
+                if(table.lineNum<2 or table.bbox[2]-table.bbox[0]<50):
+                    continue
+                text=self.text_in_rect(table,textBoxs['all'])
+                if(len(text)!=0):
+                    if(re.search("Algorithm",text[0].get_text())):
+                        page_elem['Algorithm'].append(table)
+                        continue
+                #split lines into groups
+                divided_text=[[] for i in range(1,len(table.lines))]
+
+                for t in text:
+                    mid_y=midPoint(t)[1]
                     for i in range(1,len(table.lines)):
-                        divided.append([])
-                    for t in text:
-                        mid_y=midPoint(t)[1]
-                        for i in range(1,len(table.lines)):
-                            if(mid_y>table.lines[i][1]):
-                                divided[i-1].append(t)
-                                break
-                    split_tables=[]
-                    prev_i=0
-                    for i in range(len(table.lines)-1):
-                        if(len(divided[i])==0):
-                            continue
-                        if(len(divided[i])==1 and not (divided[i][0].bbox[0]>table.bbox[0] and divided[i][0].bbox[2]<table.bbox[2])):
-                            new_table=Table()
-                            new_table.setLines(table.lines[prev_i:i+1])
-                            prev_i=i+1
-                            split_tables.append(new_table)
-                    new_table=Table()
-                    new_table.setLines(table.lines[prev_i:len(table.lines)])
-                    split_tables.append(new_table)
-                    for split_table in split_tables:
-                        minn=100000000
-                        title=None
-                        candidate=candidate_settings[positionClassifier(split_table,page_width)]
-                        for group in candidate:
-                            for y in textBoxs[group]:
-                                #the title is above the table
-                                if(split_table.bbox[3]>y.bbox[1]):
-                                    continue
-                                dst=rectDistance(table,y)
-                                if(dst<minn):
-                                    minn=dst
-                                    title=y
-                        if(title==None):
-                            title=notFound()
-                        title_merged=mergedText(title,textBoxs['all'])
-                        split_table.setTitle(title_merged)
-                        page_elem['Table'].append(split_table)
-                        
+                        if(mid_y>table.lines[i][1]):
+                            divided_text[i-1].append(t)
+                            break
+                split_tables=[]
+                prev_i=0
+                for i in range(len(table.lines)-1):
+                    if(len(divided_text[i])==0):
+                        continue
+                    if(len(divided_text[i])==1 and divided_text[i][0].bbox[2]-divided_text[i][0].bbox[0]>1/4*(table.bbox[2]-table.bbox[0])):
+                        #split the table
+                        new_table=Table()
+                        new_table.setLines(table.lines[prev_i:i+1])
+                        prev_i=i+1
+                        split_tables.append(new_table)
+                #the last table
+                new_table=Table()
+                new_table.setLines(table.lines[prev_i:len(table.lines)])
+                split_tables.append(new_table)
+
+                for split_table in split_tables:
+                    minn=100000000
+                    title=None
+                    posGroups=posGroups_settings[positionClassifier(split_table,page_width)]
+                    for group in posGroups:
+                        for y in textBoxs[group]:
+                            #the title is above the table
+                            if(split_table.bbox[3]>y.bbox[1]):
+                                continue
+                            dst=rectDistance(table,y)
+                            if(dst<minn):
+                                minn=dst
+                                title=y
+                    if(title==None):
+                        title=notFound()
+                    title_merged=mergedText(title,textBoxs['all'])
+                    split_table.setTitle(title_merged)
+                    page_elem['Table'].append(split_table)
+            #assert index!=1         
             for x in elem_type:
                 self.elem[x].append(page_elem[x])
             index+=1

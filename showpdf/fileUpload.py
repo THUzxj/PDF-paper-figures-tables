@@ -25,6 +25,8 @@ def upload(request):
         figure_titles=pdf.get_figure_titles()
         table_titles=pdf.get_table_titles()
         page_num=pdf.page_num
+        #figure_paths=[[] for i in range(page_num)]
+        #table_paths=[[] for i in range(page_num)]
         pages=[]
         for index in range(page_num):
             fnum=min(len(figure_paths[index]),len(figure_titles[index]))
@@ -35,18 +37,19 @@ def upload(request):
                 f.append((figure_titles[index][i],figure_paths[index][i]))
             if(len(figure_paths[index])>fnum):
                 for i in range(fnum,len(figure_paths[index])):
-                    f.append(figure_titles[index][i],"Not Found")
+                    f.append(("Not Found",figure_paths[index][i]))
             if(len(figure_titles[index])>fnum):
                 for i in range(fnum,len(figure_titles[index])):
-                    f.append("Not Found",figure_paths[index][i])
+                    f.append((figure_titles[index][i],"Not Found"))
             for i in range(tnum):
                 t.append((table_titles[index][i],table_paths[index][i]))
             if(len(table_paths[index])>tnum):
                 for i in range(tnum,len(table_paths[index])):
-                    t.append(table_titles[index][i],"Not Found")
+                    t.append(("Not Found",table_paths[index][i]))
             if(len(table_titles[index])>tnum):
                 for i in range(tnum,len(table_titles[index])):
-                    t.append("Not Found",table_paths[index][i])
+                    t.append((table_titles[index][i],"Not Found"))
+                    
             pages.append((f,t))
         ret['pages']=pages
         table_texts=pdf.extract_table_text()
